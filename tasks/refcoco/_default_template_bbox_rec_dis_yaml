@@ -1,0 +1,47 @@
+dataset_path: lmms-lab/RefCOCO  # val / testA / testB shards
+dataset_kwargs:
+  data_files:
+    val:
+      - "data/val-00000-of-00004.parquet"
+      - "data/val-00001-of-00004.parquet"
+      - "data/val-00002-of-00004.parquet"
+      - "data/val-00003-of-00004.parquet"
+    testA:
+      - "data/testA-00000-of-00001.parquet"
+    testB:
+      - "data/testB-00000-of-00001.parquet"
+  verification_mode: no_checks
+output_type: generate_until
+process_docs: !function utils_rec.refcoco_bbox_rec_preprocess_dataset
+doc_to_visual: !function utils_rec.refcoco_bbox_rec_doc_to_visual
+doc_to_text: !function utils_dis.refcoco_dis_doc_to_text
+doc_to_target: "bbox"
+generation_kwargs:
+  until:
+    - "ASSISTANT:"
+  max_new_tokens: 128
+process_results: !function utils_dis.refcoco_dis_process_result
+metric_list:
+  - metric: refcoco_IoU
+    aggregation : !function utils_rec.refcoco_bbox_rec_iou
+    higher_is_better : true
+  - metric: refcoco_ACC@0.1
+    aggregation : !function utils_rec.refcoco_bbox_rec_acc01
+    higher_is_better : true
+  - metric: refcoco_ACC@0.3
+    aggregation : !function utils_rec.refcoco_bbox_rec_acc03
+    higher_is_better : true
+  - metric: refcoco_ACC@0.5
+    aggregation : !function utils_rec.refcoco_bbox_rec_acc05
+    higher_is_better : true
+  - metric: refcoco_ACC@0.7
+    aggregation : !function utils_rec.refcoco_bbox_rec_acc07
+    higher_is_better : true
+  - metric: refcoco_ACC@0.9
+    aggregation : !function utils_rec.refcoco_bbox_rec_acc09
+    higher_is_better : true
+  - metric: refcoco_Center_ACC
+    aggregation : !function utils_rec.refcoco_bbox_rec_center_acc
+    higher_is_better : true
+metadata:
+  version: '0.0'

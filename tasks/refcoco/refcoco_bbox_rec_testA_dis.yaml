@@ -1,0 +1,4 @@
+group: refcoco_bbox_rec_dis
+task: refcoco_bbox_rec_testA_dis
+test_split: testA
+include: _default_template_bbox_rec_dis_yaml

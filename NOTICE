@@ -1,0 +1,20 @@
+PRUDENT
+Copyright 2026 The PRUDENT authors (Yanchao Li, Jiaqing Xie, Ben Gao, Yusu Zhang, Beilun Wang, Yanbo Wang,
+Xiaohua Xu, Zhongyu Huang, Tianfan Fu, Nanqing Dong)
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This repository does not include third-party source trees. It builds on the following projects:
+
+- IF-Prune (https://github.com/snap-research/EVLM-IF-Prune), Apache License 2.0. setup.sh clones it at commit
+  d17c2af; models/ runs PRUDENT on its InternVL wrapper.
+- lmms-eval (https://github.com/EvolvingLMMs-Lab/lmms-eval), MIT License, in the copy that IF-Prune ships.
+  patches/lmms-eval.patch holds our changes to that copy, and tasks/ adds task files written in its format.
+- The selection functions in baselines/ (and their copies in families/fam_opp.py) re-implement VisionZip, ToMe,
+  CDPruner, MMTok and ZOO-Prune for InternVL and Qwen3-VL, following each paper and the official code named in
+  the docstrings of baselines/fuse_vz.py and baselines/fuse_new.py. They are not copies of that code.
+- families/probe_q3.py copies the dynamic_preprocess tiling of InternVL (https://github.com/OpenGVLab/InternVL),
+  MIT License.
+
+Model weights and benchmark data are not part of this repository and keep their own licenses. data/prompts holds
+the prompts built from the benchmarks' questions, and data/perq the answers of the models to them.

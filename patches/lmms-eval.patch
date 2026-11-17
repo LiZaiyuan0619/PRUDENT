@@ -1,0 +1,131 @@
+diff -ruN a/lmms-eval/lmms_eval/models/__init__.py b/lmms-eval/lmms_eval/models/__init__.py
+--- a/lmms-eval/lmms_eval/models/__init__.py
++++ b/lmms-eval/lmms_eval/models/__init__.py
+@@ -29,6 +29,10 @@
+     "internvl2": "InternVL2",
+     "internvl_kl": "InternVL2_KL",
+     "internvl_sgl": "InternVL2_SGL",
++    "internvl_sgp": "InternVL2_SGP",  # SGL's map from a small VLM (PRUDENT code)
++    "internvl_obs": "InternVL2_Obs",  # the guide's maps, dumped once per question (PRUDENT code)
++    "internvl_fuse": "InternVL2_Fuse",  # prune the large VLM with a fused map (PRUDENT code)
++    "internvl_checker": "InternVLChecker",  # the checker answers from the full image (PRUDENT code)
+     "internvl_fastv": "InternVL2_fastV",
+     "llama_vid": "LLaMAVid",
+     "llama_vision": "LlamaVision",
+diff -ruN a/lmms-eval/lmms_eval/models/internvl_kl.py b/lmms-eval/lmms_eval/models/internvl_kl.py
+--- a/lmms-eval/lmms_eval/models/internvl_kl.py
++++ b/lmms-eval/lmms_eval/models/internvl_kl.py
+@@ -14,8 +14,15 @@
+ from lmms_eval.api.instance import Instance
+ from lmms_eval.api.model import lmms
+ from lmms_eval.api.registry import register_model
+-import sys
+-sys.path.append("path/to/visual_pruning_kl/internvl_chat")
++import sys, os
++# The directory that contains the `internvl` package, resolved from this file's location
++# (lmms-eval/lmms_eval/models/ -> repo root -> internvl_kl); IFPRUNE_REPO overrides it.
++_IFPRUNE_REPO = os.environ.get(
++    "IFPRUNE_REPO",
++    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
++        os.path.abspath(__file__))))),
++)
++sys.path.append(os.path.join(_IFPRUNE_REPO, "internvl_kl"))
+ from internvl.model.internvl_chat import InternVLChatModel
+ from internvl.train.dataset import build_transform, dynamic_preprocess
+ from internvl.model.internvl_chat.configuration_internvl_chat import InternVLChatConfig
+@@ -24,6 +31,29 @@
+ from torchvision.utils import save_image
+ eval_logger = logging.getLogger("eval_logger")
+ 
++# Added for diagnosis: IFPRUNE_DUMP_PATH=<file.jsonl> appends, per sample, the small
++# model's full visual-token importance (float32, base64) and the tile count, so later
++# analyses (entropy, overlap with a second estimator) need not rerun the small model.
++# The importance does not depend on the keep ratio. Unset = shipped behaviour.
++_DUMP_PATH = os.environ.get("IFPRUNE_DUMP_PATH")
++
++
++def _dump_importance(task, doc_id, num_patches, importance):
++    import base64
++    import json
++
++    arr = importance.detach().float().cpu().numpy().astype(np.float32).reshape(-1)
++    rec = {
++        "task": task,
++        "doc_id": doc_id,
++        "num_patches": int(num_patches),
++        "n_visual": int(arr.size),
++        "importance_f32_b64": base64.b64encode(arr.tobytes()).decode("ascii"),
++    }
++    with open(_DUMP_PATH, "a") as f:
++        f.write(json.dumps(rec) + "\n")
++
++
+ IMAGENET_MEAN = (0.485, 0.456, 0.406)
+ IMAGENET_STD = (0.229, 0.224, 0.225)
+ 
+@@ -188,10 +218,17 @@
+         batch_size: str = "1",
+         num_frame: int = 32,
+         num_layers=None,
++        large_checkpoint: str = None,
+         **kwargs,
+     ):
+         super().__init__()
+-        large_checkpoint="/nfs/gsun3/VLM_eval_for_token_redcution/ckpt/InternVL2-26B"
++        # The large VLM is a model_arg (model_args=large_checkpoint=...), with an env fallback.
++        if large_checkpoint is None:
++            large_checkpoint = os.environ.get("IFPRUNE_LARGE_CKPT")
++        assert large_checkpoint, (
++            "large_checkpoint must be given (model_args=large_checkpoint=/path) "
++            "or set via env IFPRUNE_LARGE_CKPT"
++        )
+         self.path = pretrained
+         self.num_frame = num_frame
+ 
+@@ -381,8 +418,10 @@
+                 img_context_token_id = self.small_model_tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN)
+                 self.small_model.img_context_token_id = img_context_token_id
+                 small_res = self.small_model(**small_inputs)
++                if _DUMP_PATH:
++                    _dump_importance(task, doc_id, num_patches, small_res.importance)
++
+ 
+-                
+                 
+                 
+                 large_model_prune_ratio = gen_kwargs.get('large_model_prune_ratio',0.05)
+diff -ruN a/lmms-eval/lmms_eval/tasks/mmbench/mmbench_evals.py b/lmms-eval/lmms_eval/tasks/mmbench/mmbench_evals.py
+--- a/lmms-eval/lmms_eval/tasks/mmbench/mmbench_evals.py
++++ b/lmms-eval/lmms_eval/tasks/mmbench/mmbench_evals.py
+@@ -1,4 +1,5 @@
+ import math
++import os
+ import os.path as osp
+ import random as rd
+ import string
+@@ -143,6 +144,11 @@
+         ]
+         payload = {"model": self.model_version, "messages": messages, "temperature": temperature, "max_tokens": max_tokens, "n": n}
+ 
++        # LMMS_EVAL_NO_API=1: without network, fail at once instead of retrying; the raw
++        # predictions are in --log_samples and are matched offline afterwards.
++        if os.environ.get("LMMS_EVAL_NO_API") == "1":
++            return "Failed to obtain answer via API"
++
+         while patience > 0:
+             patience -= 1
+             try:
+diff -ruN a/lmms-eval/lmms_eval/tasks/mmvet/utils.py b/lmms-eval/lmms_eval/tasks/mmvet/utils.py
+--- a/lmms-eval/lmms_eval/tasks/mmvet/utils.py
++++ b/lmms-eval/lmms_eval/tasks/mmvet/utils.py
+@@ -103,6 +103,10 @@
+ def mmvet_process_results(doc, results):
+     # get pred and ground truth here
+     pred = results[0]
++    if os.environ.get("LMMS_EVAL_NO_API") == "1":  # offline: keep the answer, judge it later
++        return {"gpt_eval_score": {"question_id": doc["question_id"], "question": doc["question"],
++                                   "gt_answer": doc["answer"], "capabilities": doc["capability"],
++                                   "pred_answer": pred, "score": 0.0, "eval_model": "none"}}
+     question = doc["question"]
+     answer = doc["answer"]
+     gpt_query_prompt = f"{MM_VET_PROMPT}\n{question} | {answer.replace('<AND>', ' <AND> ').replace('<OR>', ' <OR> ')} | {pred} |"
