@@ -1,5 +1,7 @@
 # Disagree to Prune: Reallocating Visual Tokens Where a Small VLM Dissents
 
+Paper: [arXiv](https://arxiv.org/abs/2611.23807)  &nbsp;·&nbsp; [Citation](#citation)
+
 Yanchao Li<sup>1,2</sup>, Jiaqing Xie<sup>3,2</sup>, Ben Gao<sup>4</sup>, Yusu Zhang<sup>5</sup>,
 Beilun Wang<sup>6</sup>, Yanbo Wang<sup>7</sup>, Xiaohua Xu<sup>8</sup>, Zhongyu Huang<sup>2</sup>,
 Tianfan Fu<sup>1,2,\*</sup>, Nanqing Dong<sup>2,9,\*</sup>
@@ -184,6 +186,20 @@ prompts from `data/prompts`, and outputs go to `$PRUDENT_OUT/families`. Their sc
   only our own files and our changes as a patch.
 - The timed pipeline of Figure 5c measured every method on one implementation. Its measurements are in
   `data/results/figure5c_*.csv`.
+  
+## Citation
+
+```bibtex
+@misc{li2026disagreeprunereallocatingvisual,
+      title={Disagree to Prune: Reallocating Visual Tokens Where a Small VLM Dissents}, 
+      author={Yanchao Li and Jiaqing Xie and Ben Gao and Yusu Zhang and Beilun Wang and Yanbo Wang and Xiaohua Xu and Zhongyu Huang and Tianfan Fu and Nanqing Dong},
+      year={2026},
+      eprint={2611.22472},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2611.22472}, 
+}
+```
 
 ## License and acknowledgments
 
